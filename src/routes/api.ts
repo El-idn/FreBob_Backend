@@ -28,6 +28,7 @@ import {
   resetDemoStore,
   saveExtraction,
   storeMode,
+  updateBusiness,
   updateExtractionStatus,
 } from '../repo/index.js';
 import { getSupabase } from '../supabase.js';
@@ -172,7 +173,7 @@ apiRouter.post('/auth/businesses', requireAuth, async (req, res, next) => {
         business_id: result.business.id,
         kind: 'onboarding',
         content: note,
-        trust_level: 'suggested',
+        trust_level: 'unconfirmed',
       });
       if (error) console.warn('inventory notes memory failed:', error.message);
     }
@@ -250,7 +251,16 @@ apiRouter.post('/extractions/:id/reject', requireBusinessAccess, async (req, res
       res.status(400).json({ error: 'Invalid reject payload', details: parsed.error.flatten() });
       return;
     }
-    await updateExtractionStatus(parsed.data.extractionId, 'rejected');
+    const ok = await updateExtractionStatus(
+      parsed.data.extractionId,
+      'rejected',
+      undefined,
+      parsed.data.businessId,
+    );
+    if (!ok) {
+      res.status(404).json({ error: 'Extraction not found for this business' });
+      return;
+    }
     res.json({ ok: true, status: 'rejected' });
   } catch (err) {
     next(err);
@@ -260,6 +270,32 @@ apiRouter.post('/extractions/:id/reject', requireBusinessAccess, async (req, res
 apiRouter.get('/businesses/:businessId', requireBusinessAccess, async (req, res, next) => {
   try {
     const business = await getBusiness(param(req.params.businessId));
+    if (!business) {
+      res.status(404).json({ error: 'Business not found' });
+      return;
+    }
+    res.json({ business });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.patch('/businesses/:businessId', requireBusinessAccess, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      name: z.string().min(2).optional(),
+      category: z.string().optional(),
+      location: z.string().optional(),
+      phone: z.string().nullable().optional(),
+      currency: z.string().min(3).optional(),
+      preferredLanguage: z.enum(['en', 'pcm', 'yo', 'ha', 'ig']).optional(),
+    });
+    const parsed = schema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid business update', details: parsed.error.flatten() });
+      return;
+    }
+    const business = await updateBusiness(param(req.params.businessId), parsed.data);
     if (!business) {
       res.status(404).json({ error: 'Business not found' });
       return;

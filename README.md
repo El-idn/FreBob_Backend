@@ -47,11 +47,14 @@ You can also deploy from [`render.yaml`](render.yaml) (Blueprint) with rootDir `
 
 ## Supabase
 
-1. Create a project.
-2. Run migrations in order: `001_frebob_core.sql`, `002_rls_and_phone.sql`, `003_demo_seed.sql`.
-3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+See the full runbook: [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md).
 
-Without those env vars the API boots in **memory mode** (demo seed).
+1. Create a project.
+2. Run migrations in order: `001` → `002` → `003` → `004_auth_onboarding_rls.sql`.
+3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the server.
+4. Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` on mobile.
+
+Without server Supabase env vars the API boots in **memory mode** (demo seed).
 
 ## AI providers
 
@@ -78,5 +81,6 @@ or your Render URL ending in `/v1`. Restart Expo after changing. The app sends `
 
 ## Auth
 
-- Memory mode: header `X-Demo-Mode: 1`
+- Memory / Explore Demo: header `X-Demo-Mode: 1`
 - Supabase mode: `Authorization: Bearer <access_token>` + business membership
+- Setup: [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md)

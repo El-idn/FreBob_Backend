@@ -25,6 +25,23 @@ Base URL (local): `http://localhost:4000/v1`
 | POST | `/auth/bootstrap` | Bearer | Upsert `public.users` |
 | POST | `/auth/businesses` | Bearer | Create business + owner membership (+ optional starter products) |
 
+### Business update
+
+`PATCH /businesses/:businessId` (demo header or Bearer + membership)
+
+```json
+{
+  "name": "Amaka Provisions",
+  "category": "Retail",
+  "location": "Lagos",
+  "phone": "+2348010000000",
+  "currency": "NGN",
+  "preferredLanguage": "en"
+}
+```
+
+**Response** — `{ "business": { ... } }`
+
 **POST `/auth/bootstrap` body (optional)**
 
 ```json

@@ -34,6 +34,54 @@ export async function getBusiness(businessId: string): Promise<Business | null> 
   return mapBusiness(data);
 }
 
+export async function updateBusiness(
+  businessId: string,
+  patch: {
+    name?: string;
+    category?: string;
+    location?: string;
+    phone?: string | null;
+    currency?: string;
+    preferredLanguage?: string;
+  },
+): Promise<Business | null> {
+  if (storeMode() === 'memory') {
+    const row = getMemoryDb().businesses.find((b) => b.id === businessId);
+    if (!row) return null;
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.category !== undefined) row.category = patch.category;
+    if (patch.location !== undefined) row.location = patch.location;
+    if (patch.phone !== undefined) row.phone = patch.phone ?? undefined;
+    if (patch.currency !== undefined) row.currency = patch.currency;
+    if (patch.preferredLanguage !== undefined) {
+      row.preferredLanguage = patch.preferredLanguage;
+    }
+    return { ...row };
+  }
+
+  const payload: Record<string, unknown> = {};
+  if (patch.name !== undefined) payload.name = patch.name;
+  if (patch.category !== undefined) payload.category = patch.category;
+  if (patch.location !== undefined) payload.location = patch.location;
+  if (patch.phone !== undefined) payload.phone = patch.phone;
+  if (patch.currency !== undefined) payload.currency = patch.currency;
+  if (patch.preferredLanguage !== undefined) {
+    payload.preferred_language = patch.preferredLanguage;
+  }
+  if (!Object.keys(payload).length) {
+    return getBusiness(businessId);
+  }
+
+  const { data, error } = await getSupabase()!
+    .from('businesses')
+    .update(payload)
+    .eq('id', businessId)
+    .select('*')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? mapBusiness(data) : null;
+}
+
 export async function listProducts(businessId: string): Promise<Product[]> {
   if (storeMode() === 'memory') {
     return getMemoryDb().products.filter((p) => p.businessId === businessId);
@@ -172,17 +220,21 @@ export async function updateExtractionStatus(
   extractionId: string,
   status: ExtractionRecord['status'],
   correctedFields?: ExtractionRecord['fields'],
-): Promise<void> {
+  businessId?: string,
+): Promise<boolean> {
   if (storeMode() === 'memory') {
-    const row = getMemoryDb().extractions.find((e) => e.id === extractionId);
-    if (row) {
-      row.status = status;
-      row.reviewedAt = new Date().toISOString();
-      if (correctedFields) row.fields = correctedFields;
-    }
-    return;
+    const row = getMemoryDb().extractions.find(
+      (e) =>
+        e.id === extractionId &&
+        (!businessId || e.businessId === businessId),
+    );
+    if (!row) return false;
+    row.status = status;
+    row.reviewedAt = new Date().toISOString();
+    if (correctedFields) row.fields = correctedFields;
+    return true;
   }
-  const { error } = await getSupabase()!
+  let query = getSupabase()!
     .from('ai_extractions')
     .update({
       status,
@@ -190,7 +242,10 @@ export async function updateExtractionStatus(
       reviewed_at: new Date().toISOString(),
     })
     .eq('id', extractionId);
+  if (businessId) query = query.eq('business_id', businessId);
+  const { data, error } = await query.select('id');
   if (error) throw new Error(error.message);
+  return Boolean(data?.length);
 }
 
 export async function findProductMatch(

@@ -122,7 +122,7 @@ export async function approveExtraction(input: ApproveRequest): Promise<ApproveR
     customerId: customer.id,
   });
 
-  await updateExtractionStatus(input.extractionId, 'confirmed', fields);
+  await updateExtractionStatus(input.extractionId, 'confirmed', fields, input.businessId);
 
   return { ok: true, orderId, order };
 }
