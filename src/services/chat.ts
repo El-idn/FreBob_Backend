@@ -1,6 +1,6 @@
 import { listConversations, listCustomers, listMemories, listOrders, listProducts } from '../repo/index.js';
 import { dashboardMetrics } from './chatMetrics.js';
-import { geminiGenerateJson, getGeminiApiKey } from './gemini.js';
+import { geminiGenerateJson, getGeminiApiKey, parseGeminiJsonText } from './gemini.js';
 
 export { dashboardMetrics } from './chatMetrics.js';
 
@@ -129,8 +129,17 @@ Merchant data (sole source of truth):
 ${JSON.stringify(input.context)}`;
 
   const text = await geminiGenerateJson({ prompt, temperature: 0.2 });
-  const raw = JSON.parse(text) as { answer?: string; evidence?: string };
-  if (!raw.answer) return null;
+  let raw: { answer?: string; evidence?: string };
+  try {
+    raw = parseGeminiJsonText(text) as { answer?: string; evidence?: string };
+  } catch (err) {
+    throw new Error(
+      `Gemini JSON parse failed: ${err instanceof Error ? err.message : String(err)} · body=${text.slice(0, 160)}`,
+    );
+  }
+  if (!raw.answer) {
+    throw new Error(`Gemini response missing answer · body=${text.slice(0, 160)}`);
+  }
   return {
     text: String(raw.answer),
     evidence: String(raw.evidence ?? 'Merchant FreBob data'),
@@ -172,6 +181,12 @@ export async function answerChat(input: {
     if (gemini) return gemini;
   } catch (err) {
     console.warn('Gemini chat failed:', err);
+    const detail = err instanceof Error ? err.message : String(err);
+    return {
+      text: UNAVAILABLE[lang],
+      evidence: `AI unavailable: ${detail.slice(0, 240)}`,
+      intent: 'error',
+    };
   }
 
   return unavailableReply(lang);

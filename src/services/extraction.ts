@@ -7,7 +7,7 @@ import {
   assertBusinessRelevant,
   ExtractionIrrelevantError,
 } from './businessRelevance.js';
-import { geminiGenerateContentUrl, getGeminiApiKey } from './gemini.js';
+import { geminiGenerateContent, getGeminiApiKey, parseGeminiJsonText } from './gemini.js';
 /**
  * Live Gemini extraction (text + optional image) with deterministic money recompute.
  * Falls back to mock fixtures when GEMINI_API_KEY is missing or the call fails.
@@ -86,28 +86,13 @@ ${sourceText}`;
     });
   }
 
-  const url = geminiGenerateContentUrl(key);
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
-    }),
+  const { text } = await geminiGenerateContent({
+    parts,
+    temperature: 0.1,
+    json: true,
   });
 
-  if (!response.ok) {
-    const errBody = await response.text().catch(() => '');
-    throw new Error(`Gemini HTTP ${response.status}: ${errBody.slice(0, 200)}`);
-  }
-
-  const payload = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return null;
-
-  const raw = JSON.parse(text) as Record<string, unknown>;
+  const raw = parseGeminiJsonText(text) as Record<string, unknown>;
   if (raw.relevant === false) {
     throw new ExtractionIrrelevantError(
       String(

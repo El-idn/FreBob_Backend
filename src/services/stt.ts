@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { languageSchema } from '../schemas.js';
-import { geminiGenerateContentUrl, getGeminiApiKey } from './gemini.js';
+import { geminiGenerateContent, getGeminiApiKey, parseGeminiJsonText } from './gemini.js';
 
 type LanguageCode = z.infer<typeof languageSchema>;
 
@@ -73,44 +73,23 @@ Rules:
 - Do not invent business facts; only transcribe what was said
 - Prefer the spoken language over the hint when they disagree`;
 
-  const url = geminiGenerateContentUrl(key);
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data,
-              },
-            },
-          ],
+  const { text } = await geminiGenerateContent({
+    parts: [
+      { text: prompt },
+      {
+        inline_data: {
+          mime_type: mimeType,
+          data,
         },
-      ],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
-    }),
+      },
+    ],
+    temperature: 0.1,
+    json: true,
   });
-
-  if (!response.ok) {
-    const errBody = await response.text().catch(() => '');
-    throw new SttError(`Speech recognition failed (${response.status}). ${errBody.slice(0, 160)}`);
-  }
-
-  const payload = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new SttError('No speech detected. Please record again.');
-  }
 
   let parsed: { originalText?: string; englishText?: string; language?: string };
   try {
-    parsed = JSON.parse(text) as typeof parsed;
+    parsed = parseGeminiJsonText(text) as typeof parsed;
   } catch {
     throw new SttError('Could not parse speech result. Please try again.');
   }
