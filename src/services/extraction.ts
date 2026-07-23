@@ -7,7 +7,7 @@ import {
   assertBusinessRelevant,
   ExtractionIrrelevantError,
 } from './businessRelevance.js';
-
+import { geminiGenerateContentUrl, getGeminiApiKey } from './gemini.js';
 /**
  * Live Gemini extraction (text + optional image) with deterministic money recompute.
  * Falls back to mock fixtures when GEMINI_API_KEY is missing or the call fails.
@@ -16,7 +16,7 @@ import {
 export async function runExtraction(
   input: ExtractRequest,
 ): Promise<{ extractionId: string; fields: ExtractedFields; sourceText: string }> {
-  if (process.env.GEMINI_API_KEY) {
+  if (getGeminiApiKey()) {
     try {
       const gemini = await runGeminiExtraction(input);
       if (gemini) {
@@ -35,7 +35,7 @@ export async function runExtraction(
 async function runGeminiExtraction(
   input: ExtractRequest,
 ): Promise<{ extractionId: string; fields: ExtractedFields; sourceText: string } | null> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = getGeminiApiKey();
   if (!key) return null;
 
   const sourceText =
@@ -86,7 +86,7 @@ ${sourceText}`;
     });
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+  const url = geminiGenerateContentUrl(key);
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

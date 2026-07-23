@@ -1,5 +1,6 @@
 import { listConversations, listCustomers, listMemories, listOrders, listProducts } from '../repo/index.js';
 import { dashboardMetrics } from './chatMetrics.js';
+import { geminiGenerateJson, getGeminiApiKey } from './gemini.js';
 
 export { dashboardMetrics } from './chatMetrics.js';
 
@@ -96,8 +97,7 @@ async function answerWithGemini(input: {
   language: Lang;
   context: Awaited<ReturnType<typeof buildContextPack>>;
 }): Promise<{ text: string; evidence: string; intent: string } | null> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  if (!getGeminiApiKey()) return null;
 
   const langNames: Record<Lang, string> = {
     en: 'English',
@@ -128,22 +128,7 @@ Question: ${input.question}
 Merchant data (sole source of truth):
 ${JSON.stringify(input.context)}`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-    }),
-  });
-  if (!response.ok) throw new Error(`Gemini chat HTTP ${response.status}`);
-
-  const payload = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return null;
+  const text = await geminiGenerateJson({ prompt, temperature: 0.2 });
   const raw = JSON.parse(text) as { answer?: string; evidence?: string };
   if (!raw.answer) return null;
   return {
@@ -173,7 +158,7 @@ export async function answerChat(input: {
 
   const context = await buildContextPack(input.businessId);
 
-  if (!process.env.GEMINI_API_KEY) {
+  if (!getGeminiApiKey()) {
     return unavailableReply(lang);
   }
 

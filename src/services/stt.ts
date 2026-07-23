@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { languageSchema } from '../schemas.js';
+import { geminiGenerateContentUrl, getGeminiApiKey } from './gemini.js';
 
 type LanguageCode = z.infer<typeof languageSchema>;
 
@@ -33,7 +34,7 @@ export async function transcribeVoiceNote(input: {
   mimeType?: string;
   languageHint?: LanguageCode;
 }): Promise<SttResult> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = getGeminiApiKey();
   if (!key) {
     throw new SttError('Gemini is not configured on the FreBob server.');
   }
@@ -72,7 +73,7 @@ Rules:
 - Do not invent business facts; only transcribe what was said
 - Prefer the spoken language over the hint when they disagree`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+  const url = geminiGenerateContentUrl(key);
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -11,6 +11,7 @@ import {
 import { requireAuth, requireBusinessAccess } from '../middleware/auth.js';
 import { approveExtraction } from '../services/approve.js';
 import { answerChat, dashboardMetrics } from '../services/chat.js';
+import { getGeminiApiKey, getGeminiModel } from '../services/gemini.js';
 import { recomputeMoney, runExtraction } from '../services/extraction.js';
 import { ExtractionIrrelevantError } from '../services/businessRelevance.js';
 import { cancelOrder, recordPayment } from '../services/orders.js';
@@ -50,7 +51,8 @@ apiRouter.get('/health', (_req, res) => {
     service: 'frebob-server',
     store: storeMode(),
     supabaseConfigured: Boolean(getSupabase()),
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    geminiConfigured: Boolean(getGeminiApiKey()),
+    geminiModel: getGeminiModel(),
     yarnGptConfigured: yarnGptConfigured(),
     demoBusinessId: DEMO_BUSINESS_ID,
     time: new Date().toISOString(),
