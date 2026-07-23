@@ -56,25 +56,51 @@ export async function synthesizeSpeech(input: {
 
   const voice = input.voice || DEFAULT_VOICE[input.language] || 'Idera';
 
-  const response = await fetch(YARNGPT_TTS_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      voice,
-      response_format: 'mp3',
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(YARNGPT_TTS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        voice,
+        response_format: 'mp3',
+      }),
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : 'network error';
+    return {
+      supported: false,
+      reason: `YarnGPT voice is unreachable right now (${detail}). Try again shortly.`,
+      audioBase64: null,
+    };
+  }
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    throw new Error(`YarnGPT HTTP ${response.status}: ${errText.slice(0, 300)}`);
+    const snippet = errText.replace(/\s+/g, ' ').trim().slice(0, 160);
+    return {
+      supported: false,
+      reason:
+        response.status >= 500
+          ? `YarnGPT is temporarily unavailable (HTTP ${response.status}). Voice will work again when their service recovers.`
+          : `YarnGPT voice failed (HTTP ${response.status})${snippet ? `: ${snippet}` : ''}.`,
+      audioBase64: null,
+    };
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) {
+    return {
+      supported: false,
+      reason: 'YarnGPT returned empty audio. Try a shorter reply.',
+      audioBase64: null,
+    };
+  }
+
   return {
     supported: true,
     mimeType: 'audio/mpeg',
