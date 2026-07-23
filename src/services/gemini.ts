@@ -6,11 +6,11 @@ export function getGeminiApiKey(): string | undefined {
 }
 
 /**
- * gemini-2.0-flash shut down 2026-06-01.
+ * gemini-2.0-flash shut down 2026-06-01; gemini-2.5-flash 404s on some keys.
  * Override with GEMINI_MODEL on Render if needed.
  */
 export function getGeminiModel(): string {
-  return process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  return process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash';
 }
 
 export function geminiGenerateContentUrl(apiKey: string): string {
