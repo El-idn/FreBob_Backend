@@ -135,6 +135,7 @@ apiRouter.post('/auth/businesses', requireAuth, async (req, res, next) => {
       phone: z.string().optional(),
       currency: z.string().min(3).optional(),
       preferredLanguage: z.enum(['en', 'pcm', 'yo', 'ha', 'ig']).optional(),
+      whatsappAccessEnabled: z.boolean().optional(),
       starterProducts: z
         .array(
           z.object({
@@ -180,6 +181,20 @@ apiRouter.post('/auth/businesses', requireAuth, async (req, res, next) => {
         trust_level: 'unconfirmed',
       });
       if (error) console.warn('inventory notes memory failed:', error.message);
+    }
+
+    // Granting WhatsApp access → seed sample conversations into ops data
+    const seedWhatsApp = parsed.data.whatsappAccessEnabled !== false;
+    if (seedWhatsApp) {
+      try {
+        const { seedWhatsAppSampleForBusiness } = await import('../services/onboardingSeed.js');
+        await seedWhatsAppSampleForBusiness(result.business.id);
+      } catch (seedErr) {
+        console.warn(
+          'WhatsApp onboarding seed failed:',
+          seedErr instanceof Error ? seedErr.message : seedErr,
+        );
+      }
     }
 
     res.status(201).json(result);
