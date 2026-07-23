@@ -2,6 +2,7 @@ import { createSeedSnapshot } from '../data/seed.js';
 import type {
   AuditLog,
   Business,
+  ConversationRecord,
   Customer,
   ExtractionRecord,
   InventoryEvent,
@@ -21,6 +22,7 @@ export type DbSnapshot = {
   payments: Payment[];
   inventoryEvents: InventoryEvent[];
   extractions: ExtractionRecord[];
+  conversations: ConversationRecord[];
   memories: MemoryNote[];
   auditLogs: AuditLog[];
   memberships: { businessId: string; userId: string; role: string }[];
@@ -40,6 +42,7 @@ function cloneSeed(): DbSnapshot {
     payments: s.payments.map((p) => ({ ...p })),
     inventoryEvents: s.inventoryEvents.map((e) => ({ ...e })),
     extractions: [],
+    conversations: [],
     memories: s.memories.map((m) => ({ ...m })),
     auditLogs: [],
     memberships: [{ ...s.member }],

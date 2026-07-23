@@ -3,10 +3,15 @@ import {
   type ExtractedFields,
   type ExtractRequest,
 } from '../schemas.js';
+import {
+  assertBusinessRelevant,
+  ExtractionIrrelevantError,
+} from './businessRelevance.js';
 
 /**
  * Live Gemini extraction (text + optional image) with deterministic money recompute.
  * Falls back to mock fixtures when GEMINI_API_KEY is missing or the call fails.
+ * Rejects non-business conversations (personal chat / greetings).
  */
 export async function runExtraction(
   input: ExtractRequest,
@@ -18,9 +23,11 @@ export async function runExtraction(
         return { ...gemini, fields: recomputeMoney(gemini.fields) };
       }
     } catch (err) {
+      if (err instanceof ExtractionIrrelevantError) throw err;
       console.warn('Gemini extraction failed, falling back to mock:', err);
     }
   }
+  assertBusinessRelevant(input);
   const mock = runMockExtraction(input);
   return { ...mock, fields: recomputeMoney(mock.fields) };
 }
@@ -36,10 +43,17 @@ async function runGeminiExtraction(
     (input.sampleId ? `Sample ${input.sampleId}` : 'Document / image extraction');
 
   const prompt = `You are FreBob, an SME operations assistant for Nigerian retail.
-Extract structured business fields from this ${input.source} input (chat, SMS, receipt image, or manual note).
-Currency is Nigerian Naira. Preserve product model numbers; do not invent missing prices — list uncertain field names in uncertainFields.
-Return ONLY JSON matching this schema:
+First classify whether this ${input.source} input is business-related.
+Business-related means: sales, orders, reservations, payments, invoices, receipts, stock or product/service enquiry for goods or services.
+NOT business-related: personal greetings, social chat, spam, or anything without a commercial transaction or inventory intent.
+
+If NOT business-related, return ONLY JSON:
+{ "relevant": false, "reason": "short merchant-friendly explanation" }
+
+If business-related, extract structured fields. Currency is Nigerian Naira. Preserve product model numbers; do not invent missing prices — list uncertain field names in uncertainFields.
+Return ONLY JSON:
 {
+  "relevant": true,
   "eventType": string,
   "customerName": string,
   "productName": string,
@@ -94,6 +108,15 @@ ${sourceText}`;
   if (!text) return null;
 
   const raw = JSON.parse(text) as Record<string, unknown>;
+  if (raw.relevant === false) {
+    throw new ExtractionIrrelevantError(
+      String(
+        raw.reason ||
+          'This does not look like a business sale, order, invoice, or receipt.',
+      ),
+    );
+  }
+
   const quantity = Number(raw.quantity) || 1;
   const unitPrice = Number(raw.unitPrice) || 0;
   const amountPaid = Number(raw.amountPaid) || 0;

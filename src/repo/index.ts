@@ -2,6 +2,7 @@ import { getSupabase } from '../supabase.js';
 import type {
   AuditLog,
   Business,
+  ConversationRecord,
   Customer,
   ExtractionRecord,
   InventoryEvent,
@@ -169,6 +170,47 @@ export async function listMemories(businessId: string): Promise<MemoryNote[]> {
     .eq('business_id', businessId)
     .order('created_at', { ascending: false });
   return (data ?? []).map(mapMemory);
+}
+
+export async function saveConversation(record: ConversationRecord): Promise<void> {
+  if (storeMode() === 'memory') {
+    getMemoryDb().conversations.unshift(record);
+    return;
+  }
+  const { error } = await getSupabase()!.from('conversations').insert({
+    id: record.id,
+    business_id: record.businessId,
+    source_label: record.sourceLabel,
+    source_text: record.sourceText,
+    created_at: record.createdAt,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function listConversations(
+  businessId: string,
+  limit = 8,
+): Promise<ConversationRecord[]> {
+  if (storeMode() === 'memory') {
+    return getMemoryDb()
+      .conversations.filter((c) => c.businessId === businessId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+  const { data, error } = await getSupabase()!
+    .from('conversations')
+    .select('*')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    businessId: row.business_id as string,
+    sourceLabel: (row.source_label as string) || 'Approved conversation',
+    sourceText: row.source_text as string,
+    createdAt: row.created_at as string,
+  }));
 }
 
 export async function saveExtraction(record: ExtractionRecord): Promise<void> {

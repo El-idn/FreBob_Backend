@@ -5,13 +5,16 @@ import {
   extractRequestSchema,
   paymentMethodSchema,
   rejectRequestSchema,
+  sttRequestSchema,
   ttsRequestSchema,
 } from '../schemas.js';
 import { requireAuth, requireBusinessAccess } from '../middleware/auth.js';
 import { approveExtraction } from '../services/approve.js';
 import { answerChat, dashboardMetrics } from '../services/chat.js';
 import { recomputeMoney, runExtraction } from '../services/extraction.js';
+import { ExtractionIrrelevantError } from '../services/businessRelevance.js';
 import { cancelOrder, recordPayment } from '../services/orders.js';
+import { SttError, transcribeVoiceNote } from '../services/stt.js';
 import { synthesizeSpeech, yarnGptConfigured } from '../services/voice.js';
 import {
   addProduct,
@@ -21,6 +24,7 @@ import {
   getAppUserByAuthId,
   getBusiness,
   listBusinessesForAuthUser,
+  listConversations,
   listCustomers,
   listMemories,
   listOrders,
@@ -214,6 +218,10 @@ apiRouter.post('/extract', requireBusinessAccess, async (req, res, next) => {
       fields,
     });
   } catch (err) {
+    if (err instanceof ExtractionIrrelevantError) {
+      res.status(422).json({ error: err.reason, code: 'not_business_related' });
+      return;
+    }
     next(err);
   }
 });
@@ -422,6 +430,15 @@ apiRouter.get('/businesses/:businessId/memories', requireBusinessAccess, async (
   }
 });
 
+apiRouter.get('/businesses/:businessId/conversations', requireBusinessAccess, async (req, res, next) => {
+  try {
+    const conversations = await listConversations(param(req.params.businessId), 40);
+    res.json({ conversations });
+  } catch (err) {
+    next(err);
+  }
+});
+
 apiRouter.get('/businesses/:businessId/dashboard', requireBusinessAccess, async (req, res, next) => {
   try {
     const metrics = await dashboardMetrics(param(req.params.businessId));
@@ -480,14 +497,6 @@ apiRouter.post('/tts', requireBusinessAccess, async (req, res, next) => {
       res.status(400).json({ error: 'Invalid TTS payload', details: parsed.error.flatten() });
       return;
     }
-    if (!yarnGptConfigured() && parsed.data.language !== 'pcm') {
-      res.status(503).json({
-        supported: false,
-        reason: 'YARNGPT_API_KEY is not configured on the server.',
-        audioBase64: null,
-      });
-      return;
-    }
     const result = await synthesizeSpeech({
       text: parsed.data.text,
       language: parsed.data.language,
@@ -495,6 +504,28 @@ apiRouter.post('/tts', requireBusinessAccess, async (req, res, next) => {
     });
     res.json(result);
   } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/stt', requireBusinessAccess, async (req, res, next) => {
+  try {
+    const parsed = sttRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid STT payload', details: parsed.error.flatten() });
+      return;
+    }
+    const result = await transcribeVoiceNote({
+      audioBase64: parsed.data.audioBase64,
+      mimeType: parsed.data.mimeType,
+      languageHint: parsed.data.language,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof SttError) {
+      res.status(422).json({ error: err.message });
+      return;
+    }
     next(err);
   }
 });

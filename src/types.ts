@@ -111,6 +111,14 @@ export type MemoryNote = {
   createdAt: string;
 };
 
+export type ConversationRecord = {
+  id: string;
+  businessId: string;
+  sourceLabel: string;
+  sourceText: string;
+  createdAt: string;
+};
+
 export type AuditLog = {
   id: string;
   businessId: string;

@@ -41,6 +41,8 @@ export const approveRequestSchema = z.object({
   businessId: z.string().uuid(),
   extractionId: z.string().uuid(),
   fields: extractedFieldsSchema,
+  sourceText: z.string().optional(),
+  sourceLabel: z.string().optional(),
 });
 
 export const rejectRequestSchema = z.object({
@@ -56,7 +58,15 @@ export const ttsRequestSchema = z.object({
   voice: z.string().optional(),
 });
 
+export const sttRequestSchema = z.object({
+  businessId: z.string().uuid(),
+  audioBase64: z.string().min(80),
+  mimeType: z.string().optional(),
+  language: languageSchema.optional(),
+});
+
 export type ExtractedFields = z.infer<typeof extractedFieldsSchema>;
 export type ExtractRequest = z.infer<typeof extractRequestSchema>;
 export type ApproveRequest = z.infer<typeof approveRequestSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
+export type SttRequest = z.infer<typeof sttRequestSchema>;

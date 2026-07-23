@@ -181,6 +181,31 @@ Default voices: en/yo ? `Idera`, ha ? `Umar`, ig ? `Chinenye`.
 
 ---
 
+## `POST /stt` (Gemini voice notes)
+
+```json
+{
+  "businessId": "00000000-0000-4000-8000-000000000001",
+  "audioBase64": "<base64>",
+  "mimeType": "audio/mp4",
+  "language": "yo"
+}
+```
+
+Transcribes a short voice note with Gemini (`GEMINI_API_KEY`), detects `en|pcm|yo|ha|ig`, and returns an English translation for the Ask Bob chat bubble.
+
+```json
+{
+  "originalText": "Elo ni mo ta loni?",
+  "englishText": "How much did I sell today?",
+  "language": "yo"
+}
+```
+
+`language` in the request is an optional STT hint. Empty / unusable audio → **422**.
+
+---
+
 ## Other business routes
 
 - `GET /businesses/:id` ? profile  
@@ -191,6 +216,7 @@ Default voices: en/yo ? `Idera`, ha ? `Umar`, ig ? `Chinenye`.
 - `POST /businesses/:id/orders/:orderId/cancel` ? releases reserved stock / restocks confirmed sales  
 - `GET /businesses/:id/dashboard`  
 - `GET /businesses/:id/memories`  
+- `GET /businesses/:id/conversations` — approved chat corpus for Bob  
 - `POST /demo/reset` ? memory mode only  
 
 ---

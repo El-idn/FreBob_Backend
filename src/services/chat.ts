@@ -1,54 +1,17 @@
-import { listCustomers, listMemories, listOrders, listProducts } from '../repo/index.js';
+import { listConversations, listCustomers, listMemories, listOrders, listProducts } from '../repo/index.js';
 import { dashboardMetrics } from './chatMetrics.js';
 
 export { dashboardMetrics } from './chatMetrics.js';
 
-const REPLIES = {
-  sales: {
-    en: 'Today’s approved sales value is based on confirmed orders only.',
-    pcm: 'Wetin you sell today na only the ones you don approve.',
-    yo: 'Iye tita ti o fọwọ́ sí lónìí nìkan ni a ń lo.',
-    ha: 'Kudiyar sayarwa ta yau tana danganta ne kawai da umarni da aka amince.',
-    ig: 'Ego e rere taa dabere na iwu e kwadoro naanị.',
-  },
-  moneyIn: {
-    en: 'Money received today from approved payments:',
-    pcm: 'Money wey enter today from approved payments:',
-    yo: 'Owó tí o gba lónìí látàrí ìsanwó tí a fọwọ́ sí:',
-    ha: 'Kudin da aka karɓa yau daga biya da aka amince:',
-    ig: 'Ego batara taa site n’ịkwụ ụgwọ e kwadoro:',
-  },
-  balance: {
-    en: 'These customers still owe balances on approved orders.',
-    pcm: 'Na these people still dey owe you for approved orders.',
-    yo: 'Àwọn oníbàárà wọ̀nyí ṣì jẹ ọ́ níwọ̀n owó.',
-    ha: 'Waɗannan abokan ciniki har yanzu suna bin ku biyan kuɗi.',
-    ig: 'Ndị ahịa ndị a ka ji gị ụgwọ.',
-  },
-  bestSeller: {
-    en: 'Your top-selling product from approved orders is:',
-    pcm: 'Product wey sell pass from approved orders na:',
-    yo: 'Ọjà tó ta jùlọ nínú àwọn ìbéèrè tí a fọwọ́ sí ni:',
-    ha: 'Kayan da ya fi sayarwa daga umarni da aka amince shine:',
-    ig: 'Ngwaahịa kacha ere site n’iwu e kwadoro bụ:',
-  },
-  stock: {
-    en: 'These products are at or below the low-stock threshold.',
-    pcm: 'These products don dey low for stock.',
-    yo: 'Àwọn ọjà wọ̀nyí ti kéré ní ìkàsílẹ̀.',
-    ha: 'Waɗannan kayayyaki sun yi ƙasa a stock.',
-    ig: 'Ngwaahịa ndị a dị obere n’ụlọ ahịa.',
-  },
-  missing: {
-    en: 'I don’t have enough approved data to answer that yet. Capture a chat or sale, then approve it.',
-    pcm: 'I no get enough approved data to answer that. Capture something and approve am first.',
-    yo: 'Mi ò ní ìwé tí a fọwọ́ sí tó tó láti dáhùn.',
-    ha: 'Ba ni isasshen bayanai da aka amince na amsa wannan.',
-    ig: 'Enweghị m data e kwadoro zuru ezu ịza nke ahụ.',
-  },
-} as const;
+type Lang = 'en' | 'pcm' | 'yo' | 'ha' | 'ig';
 
-type Lang = keyof (typeof REPLIES)['sales'];
+const UNAVAILABLE = {
+  en: 'Bob AI is unavailable right now. Check that Gemini is configured on the FreBob server, then try again.',
+  pcm: 'Bob AI no dey available now. Make sure Gemini dey set for FreBob server, then try again.',
+  yo: 'Bob AI kò sí nísinsin yìí. Rí i dájú pé Gemini wà lórí ẹ̀rọ FreBob, kí o tún gbìyànjú.',
+  ha: 'Bob AI ba ya samuwa yanzu. Tabbatar da an saita Gemini a uwar garken FreBob, sa\'an nan sake gwadawa.',
+  ig: 'Bob AI adịghị ugbu a. Gbaa mbọ hụ na Gemini dị na sava FreBob, wee nwaa ọzọ.',
+} as const;
 
 function isToday(iso: string): boolean {
   const d = new Date(iso);
@@ -60,11 +23,23 @@ function isToday(iso: string): boolean {
   );
 }
 
+function truncateTranscript(text: string, max = 500): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max)}…`;
+}
+
+/**
+ * Sole knowledge Gemini may use for Bob chat:
+ * - simulatedConversations: approved WhatsApp/SMS/receipt transcripts (simulated capture)
+ * - aggregatedBusinessData: orders, customers, products, memories, metrics from merchant approve/entry
+ */
 async function buildContextPack(businessId: string) {
   const orders = await listOrders(businessId);
   const customers = await listCustomers(businessId);
   const products = await listProducts(businessId);
   const memories = await listMemories(businessId);
+  const conversations = await listConversations(businessId, 8);
   const metrics = await dashboardMetrics(businessId);
 
   const todays = orders.filter((o) => isToday(o.createdAt) && o.orderStatus !== 'cancelled');
@@ -72,33 +47,46 @@ async function buildContextPack(businessId: string) {
   const lowStock = products.filter((p) => p.available <= p.lowStockThreshold);
 
   return {
-    metrics,
-    todaysOrders: todays.slice(0, 8).map((o) => ({
-      id: o.id,
-      customerName: o.customerName,
-      total: o.total,
-      amountPaid: o.amountPaid,
-      balance: o.balance,
-      status: o.orderStatus,
-      items: o.items.map((i) => `${i.quantity}x ${i.productName}`).join(', '),
+    dataPolicy:
+      'ONLY_SOURCE_OF_TRUTH: answer exclusively from simulatedConversations and aggregatedBusinessData in this JSON. No web knowledge, no general advice, no inventing.',
+    simulatedConversations: conversations.map((c) => ({
+      label: c.sourceLabel,
+      transcript: truncateTranscript(c.sourceText),
+      approvedAt: c.createdAt,
     })),
-    balances: owing.map((c) => ({ name: c.name, balanceOwed: c.balanceOwed })),
-    lowStock: lowStock.map((p) => ({
-      name: p.name,
-      variant: p.variant,
-      available: p.available,
-      reserved: p.reserved,
-    })),
-    products: products.map((p) => ({
-      name: p.name,
-      variant: p.variant,
-      available: p.available,
-      unitPrice: p.unitPrice,
-    })),
-    memories: memories.slice(0, 10).map((m) => ({
-      kind: m.kind,
-      content: m.content,
-    })),
+    aggregatedBusinessData: {
+      metrics,
+      todaysOrders: todays.slice(0, 8).map((o) => ({
+        id: o.id,
+        customerName: o.customerName,
+        total: o.total,
+        amountPaid: o.amountPaid,
+        balance: o.balance,
+        status: o.orderStatus,
+        items: o.items.map((i) => `${i.quantity}x ${i.productName}`).join(', '),
+      })),
+      balances: owing.map((c) => ({ name: c.name, balanceOwed: c.balanceOwed })),
+      lowStock: lowStock.map((p) => ({
+        name: p.name,
+        variant: p.variant,
+        available: p.available,
+        reserved: p.reserved,
+      })),
+      products: products.map((p) => ({
+        name: p.name,
+        variant: p.variant,
+        available: p.available,
+        unitPrice: p.unitPrice,
+      })),
+      customers: customers.slice(0, 40).map((c) => ({
+        name: c.name,
+        balanceOwed: c.balanceOwed,
+      })),
+      memories: memories.slice(0, 10).map((m) => ({
+        kind: m.kind,
+        content: m.content,
+      })),
+    },
   };
 }
 
@@ -119,12 +107,25 @@ async function answerWithGemini(input: {
     ig: 'Igbo',
   };
 
-  const prompt = `You are FreBob, a business operations assistant for one Nigerian SME.
-Answer ONLY from the approved business context JSON below. Never invent orders, customers, prices, or stock.
-If data is missing, say so clearly. Reply in ${langNames[input.language]}.
+  const prompt = `You are FreBob (Bob), a business assistant for ONE Nigerian SME.
+
+HARD RULE — allowed knowledge sources (nothing else):
+1) simulatedConversations — WhatsApp/SMS/receipt transcripts the merchant captured and approved (simulated business chats).
+2) aggregatedBusinessData — metrics, orders, customers, products, stock, memories derived from what the merchant entered or approved in FreBob.
+
+FORBIDDEN:
+- Outside world knowledge, news, generic SME tips, guessing prices/stock/customers
+- Unapproved sample chats that are not in simulatedConversations
+- Inventing facts not present in the JSON
+
+If the JSON does not contain enough to answer, say you do not have that in the merchant’s FreBob data yet (suggest capture + approve). Write a fresh natural reply — no canned templates.
+Reply in ${langNames[input.language]}.
 Return ONLY JSON: { "answer": string, "evidence": string }
+evidence must name which fields you used (e.g. "simulatedConversations · jollof order" or "aggregatedBusinessData.metrics").
+
 Question: ${input.question}
-Approved context:
+
+Merchant data (sole source of truth):
 ${JSON.stringify(input.context)}`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
@@ -147,86 +148,20 @@ ${JSON.stringify(input.context)}`;
   if (!raw.answer) return null;
   return {
     text: String(raw.answer),
-    evidence: String(raw.evidence ?? 'Approved business records'),
+    evidence: String(raw.evidence ?? 'Merchant FreBob data'),
     intent: 'gemini',
   };
 }
 
-function answerWithRules(input: {
-  question: string;
-  language: Lang;
-  context: Awaited<ReturnType<typeof buildContextPack>>;
-}) {
-  const lower = input.question.toLowerCase();
-  const { metrics, balances, lowStock, todaysOrders } = input.context;
-  const lang = input.language;
-
-  const productSales = new Map<string, number>();
-  // best seller approximated from context products via todays — use memories/orders already in pack
-  let bestSeller = '—';
-
-  type Intent = keyof typeof REPLIES;
-  let key: Intent = 'missing';
-  if (/owe|balance|lowo|ji ụgwọ|who still|tun je/.test(lower)) key = 'balance';
-  else if (/money (in|enter|entered|received)|received today|how much money/.test(lower))
-    key = 'moneyIn';
-  else if (/sell pass|best seller|top.?sell|sold most|wetin i sell pass/.test(lower))
-    key = 'bestSeller';
-  else if (/stock|low|fọdụrụ|kaya|ngwaahịa|obere|almost out/.test(lower)) key = 'stock';
-  else if (/sell|sold|sales|sayarwa|tita|how much did i/.test(lower)) key = 'sales';
-
-  let detail = '';
-  let evidence = '';
-  if (key === 'sales') {
-    detail = ` ₦${metrics.salesToday.toLocaleString('en-NG')} across ${metrics.ordersToday} order(s).`;
-    evidence = `${todaysOrders.length} approved order(s) today`;
-  } else if (key === 'moneyIn') {
-    detail = ` ₦${metrics.moneyInToday.toLocaleString('en-NG')}.`;
-    evidence = `Payments on ${metrics.ordersToday} approved order(s) today`;
-  } else if (key === 'balance') {
-    detail =
-      balances.length === 0
-        ? ' Nobody currently owes a balance.'
-        : ` ${balances.map((c) => `${c.name} (₦${c.balanceOwed.toLocaleString('en-NG')})`).join(', ')}.`;
-    evidence =
-      balances.length === 0
-        ? 'Customer balances (none outstanding)'
-        : balances.map((c) => c.name).join(', ');
-  } else if (key === 'bestSeller') {
-    // derive from lowStock/products sales not fully in pack — use first memory or dash
-    for (const o of todaysOrders) {
-      const name = o.items.split(',')[0]?.replace(/^\d+x\s*/, '').trim();
-      if (name) {
-        productSales.set(name, (productSales.get(name) ?? 0) + 1);
-      }
-    }
-    let bestQty = 0;
-    for (const [name, qty] of productSales) {
-      if (qty > bestQty) {
-        bestQty = qty;
-        bestSeller = name;
-      }
-    }
-    detail = ` ${bestSeller}.`;
-    evidence = 'Approved order line items';
-  } else if (key === 'stock') {
-    detail =
-      lowStock.length === 0
-        ? ' No products are low right now.'
-        : ` ${lowStock.map((p) => `${p.name} (${p.available} left)`).join(', ')}.`;
-    evidence =
-      lowStock.length === 0 ? 'Inventory thresholds' : lowStock.map((p) => p.name).join(', ');
-  } else {
-    evidence = 'No matching approved records';
-  }
-
+function unavailableReply(language: Lang) {
   return {
-    text: `${REPLIES[key][lang]}${detail}`,
-    evidence,
-    intent: key,
+    text: UNAVAILABLE[language],
+    evidence: 'AI unavailable',
+    intent: 'error',
   };
 }
 
+/** Gemini answers only from simulated + merchant-aggregated FreBob data. */
 export async function answerChat(input: {
   businessId: string;
   question: string;
@@ -238,19 +173,21 @@ export async function answerChat(input: {
 
   const context = await buildContextPack(input.businessId);
 
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const gemini = await answerWithGemini({
-        businessId: input.businessId,
-        question: input.question,
-        language: lang,
-        context,
-      });
-      if (gemini) return gemini;
-    } catch (err) {
-      console.warn('Gemini chat failed, using rules:', err);
-    }
+  if (!process.env.GEMINI_API_KEY) {
+    return unavailableReply(lang);
   }
 
-  return answerWithRules({ question: input.question, language: lang, context });
+  try {
+    const gemini = await answerWithGemini({
+      businessId: input.businessId,
+      question: input.question,
+      language: lang,
+      context,
+    });
+    if (gemini) return gemini;
+  } catch (err) {
+    console.warn('Gemini chat failed:', err);
+  }
+
+  return unavailableReply(lang);
 }

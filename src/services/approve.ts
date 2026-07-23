@@ -1,11 +1,12 @@
 import type { ApproveRequest, ExtractedFields } from '../schemas.js';
 import { recomputeMoney } from './extraction.js';
-import type { InventoryEvent, MemoryNote, Order, OrderItem, Payment, Product } from '../types.js';
+import type { ConversationRecord, InventoryEvent, MemoryNote, Order, OrderItem, Payment, Product } from '../types.js';
 import {
   findOrCreateCustomer,
   findProductMatch,
   getExtraction,
   persistApprovedOrder,
+  saveConversation,
   updateExtractionStatus,
 } from '../repo/index.js';
 
@@ -121,6 +122,20 @@ export async function approveExtraction(input: ApproveRequest): Promise<ApproveR
     customerBalanceDelta: fields.balance,
     customerId: customer.id,
   });
+
+  const sourceText = (input.sourceText?.trim() || existing.sourceText || '').trim();
+  if (sourceText) {
+    const conversation: ConversationRecord = {
+      id: crypto.randomUUID(),
+      businessId: input.businessId,
+      sourceLabel:
+        input.sourceLabel?.trim() ||
+        `${existing.source} · ${fields.productName} · ${customer.name}`,
+      sourceText: sourceText.slice(0, 4000),
+      createdAt: now,
+    };
+    await saveConversation(conversation);
+  }
 
   await updateExtractionStatus(input.extractionId, 'confirmed', fields, input.businessId);
 
