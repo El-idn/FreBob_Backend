@@ -53,7 +53,101 @@ export function parseGeminiJsonText(raw: string): unknown {
   let text = raw.trim();
   const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
   if (fenced) text = fenced[1].trim();
-  return JSON.parse(text);
+
+  // Smart quotes / odd apostrophes often break Gemini "JSON"
+  text = text
+    .replace(/[\u201C\u201D\u00AB\u00BB]/g, '"')
+    .replace(/[\u2018\u2019\u2032]/g, "'");
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      const sliced = text.slice(start, end + 1);
+      try {
+        return JSON.parse(sliced);
+      } catch {
+        const loose = extractLooseJsonObject(sliced);
+        if (loose) return loose;
+      }
+    }
+    const looseWhole = extractLooseJsonObject(text);
+    if (looseWhole) return looseWhole;
+    throw new SyntaxError('Unable to parse Gemini JSON');
+  }
+}
+
+/** Recover answer/evidence when Gemini emits invalid JSON (unescaped quotes, etc.). */
+function extractLooseJsonObject(text: string): Record<string, string> | null {
+  const answer = extractLooseStringField(text, 'answer');
+  if (!answer) return null;
+  return {
+    answer,
+    evidence: extractLooseStringField(text, 'evidence') ?? 'Merchant FreBob data',
+  };
+}
+
+function extractLooseStringField(text: string, field: string): string | undefined {
+  // Prefer span from "field": " … " before the next top-level key (handles unescaped quotes in answer)
+  if (field === 'answer') {
+    const answerMatch = text.match(/"answer"\s*:\s*"/);
+    if (answerMatch && answerMatch.index != null) {
+      const valueStart = answerMatch.index + answerMatch[0].length;
+      const evidenceMatch = text.slice(valueStart).search(/"evidence"\s*:/);
+      if (evidenceMatch >= 0) {
+        const between = text.slice(valueStart, valueStart + evidenceMatch);
+        const closed = between.match(/"\s*,\s*$/);
+        const value = closed
+          ? between.slice(0, between.length - closed[0].length)
+          : between.replace(/"\s*,\s*$/, '').replace(/,\s*$/, '');
+        if (value.trim()) {
+          return value
+            .replace(/\\n/g, '\n')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\');
+        }
+      }
+    }
+  }
+
+  const strict = new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`);
+  const strictMatch = text.match(strict);
+  if (strictMatch) {
+    try {
+      return JSON.parse(`"${strictMatch[1]}"`) as string;
+    } catch {
+      return strictMatch[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    }
+  }
+
+  const key = `"${field}"`;
+  const keyIdx = text.indexOf(key);
+  if (keyIdx < 0) return undefined;
+  const afterKey = text.slice(keyIdx + key.length);
+  const colon = afterKey.match(/^\s*:\s*"/);
+  if (!colon) return undefined;
+  let rest = afterKey.slice(colon[0].length);
+
+  const boundary = rest.search(/"\s*}\s*$|"\s*,\s*"/);
+  if (boundary >= 0) {
+    return rest
+      .slice(0, boundary)
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+  }
+
+  return rest
+    .replace(/"\s*}?\s*$/, '')
+    .replace(/\\n/g, '\n')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .trim();
 }
 
 export async function geminiGenerateContent(input: {

@@ -120,8 +120,9 @@ FORBIDDEN:
 
 If the JSON does not contain enough to answer, say you do not have that in the merchant’s FreBob data yet (suggest capture + approve). Write a fresh natural reply — no canned templates.
 Reply in ${langNames[input.language]}.
-Return ONLY JSON: { "answer": string, "evidence": string }
-evidence must name which fields you used (e.g. "simulatedConversations · jollof order" or "aggregatedBusinessData.metrics").
+Return ONLY valid JSON with exactly two string fields: { "answer": string, "evidence": string }
+JSON rules: escape any double quotes inside strings as \\"; keep answer and evidence as single-line strings (no raw newlines); write Naira amounts as NGN 370000 or NGN 370,000 (avoid special currency glyphs).
+evidence must name which fields you used (e.g. "aggregatedBusinessData.metrics" or "simulatedConversations").
 
 Question: ${input.question}
 
@@ -134,15 +135,15 @@ ${JSON.stringify(input.context)}`;
     raw = parseGeminiJsonText(text) as { answer?: string; evidence?: string };
   } catch (err) {
     throw new Error(
-      `Gemini JSON parse failed: ${err instanceof Error ? err.message : String(err)} · body=${text.slice(0, 160)}`,
+      `Gemini JSON parse failed: ${err instanceof Error ? err.message : String(err)} · body=${text.slice(0, 220)}`,
     );
   }
-  if (!raw.answer) {
-    throw new Error(`Gemini response missing answer · body=${text.slice(0, 160)}`);
+  if (!raw.answer?.trim()) {
+    throw new Error(`Gemini response missing answer · body=${text.slice(0, 220)}`);
   }
   return {
-    text: String(raw.answer),
-    evidence: String(raw.evidence ?? 'Merchant FreBob data'),
+    text: String(raw.answer).trim(),
+    evidence: String(raw.evidence ?? 'Merchant FreBob data').trim(),
     intent: 'gemini',
   };
 }
