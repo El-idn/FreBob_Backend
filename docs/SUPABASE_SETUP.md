@@ -39,7 +39,17 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 Restart Expo with a clean cache after changing env: `npx expo start -c`.
 
-## 5. Smoke checklist
+## 5. Browser / Render web Auth URLs
+
+When Expo web is hosted on Render (`frebob-web`, see FreBob repo `RENDER.md`):
+
+1. Supabase → **Authentication → URL configuration**
+2. **Site URL**: `https://frebob-web.onrender.com` (or your custom domain)
+3. **Redirect URLs**: add the same origin so sign-in / reset-password work in the browser
+
+Also ensure API `CORS_ORIGINS` includes that origin if it is not `*`.
+
+## 6. Smoke checklist
 
 1. Sign up with email/password (or sign in).
 2. App calls `POST /v1/auth/bootstrap` → row in `public.users` with `auth_user_id`.
@@ -48,7 +58,7 @@ Restart Expo with a clean cache after changing env: `npx expo start -c`.
 5. AI chat returns an API answer (not only local templates).
 6. Business settings Save → `PATCH /v1/businesses/:id` updates the **same** row (no second business).
 
-## 6. Explore Demo
+## 7. Explore Demo
 
 “Explore Demo” still uses `X-Demo-Mode: 1` and the seeded demo business id  
 `00000000-0000-4000-8000-000000000001`. It does not require a Supabase session.
