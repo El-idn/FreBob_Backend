@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const languageSchema = z.enum(['en', 'pcm', 'yo', 'ha', 'ig']);
-export const captureSourceSchema = z.enum(['whatsapp', 'sms', 'scanner', 'manual']);
+export const captureSourceSchema = z.enum(['whatsapp', 'sms', 'scanner', 'manual', 'voice']);
 export const paymentStatusSchema = z.enum(['unpaid', 'partially_paid', 'paid']);
 export const orderStatusSchema = z.enum([
   'enquiry',
@@ -28,14 +28,19 @@ export const extractedFieldsSchema = z.object({
   uncertainFields: z.array(z.string()).default([]),
 });
 
-export const extractRequestSchema = z.object({
-  businessId: z.string().uuid(),
-  source: captureSourceSchema,
-  text: z.string().min(1).optional(),
-  sampleId: z.string().optional(),
-  imageBase64: z.string().optional(),
-  mimeType: z.string().optional(),
-});
+export const extractRequestSchema = z
+  .object({
+    businessId: z.string().uuid(),
+    source: captureSourceSchema,
+    text: z.string().min(1).optional(),
+    sampleId: z.string().optional(),
+    imageBase64: z.string().optional(),
+    mimeType: z.string().optional(),
+  })
+  .refine((d) => d.source !== 'voice' || Boolean(d.text?.trim()), {
+    message: 'Voice extract requires transcript text',
+    path: ['text'],
+  });
 
 export const approveRequestSchema = z.object({
   businessId: z.string().uuid(),

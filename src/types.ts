@@ -3,7 +3,7 @@ import type { ExtractedFields } from './schemas.js';
 export type PaymentMethod = ExtractedFields['paymentMethod'];
 export type PaymentStatus = ExtractedFields['paymentStatus'];
 export type OrderStatus = ExtractedFields['orderStatus'];
-export type CaptureSource = 'whatsapp' | 'sms' | 'scanner' | 'manual';
+export type CaptureSource = 'whatsapp' | 'sms' | 'scanner' | 'manual' | 'voice';
 
 export type Business = {
   id: string;
