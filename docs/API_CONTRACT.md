@@ -2,6 +2,8 @@
 
 Base URL (local): `http://localhost:4000/v1`
 
+Interactive docs: [Swagger UI](http://localhost:4000/docs) (`/docs`). Spec: `/v1/openapi.json`.
+
 ## Auth
 
 | Mode | How |
@@ -210,6 +212,7 @@ Transcribes a short voice note with Gemini (`GEMINI_API_KEY`), detects `en|pcm|y
 
 - `GET /businesses/:id` ? profile  
 - `GET|POST /businesses/:id/products`  
+- `GET /businesses/:id/bundle` — products, customers, orders, memories, conversations, payments, inventoryEvents  
 - `GET /businesses/:id/customers`  
 - `GET /businesses/:id/orders`  
 - `POST /businesses/:id/orders/:orderId/payments`  

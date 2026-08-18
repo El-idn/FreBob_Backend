@@ -27,14 +27,17 @@ import {
   listBusinessesForAuthUser,
   listConversations,
   listCustomers,
+  listInventoryEvents,
   listMemories,
   listOrders,
+  listPayments,
   listProducts,
   resetDemoStore,
   saveExtraction,
   storeMode,
   updateBusiness,
   updateExtractionStatus,
+  updateProductStock,
 } from '../repo/index.js';
 import { getSupabase } from '../supabase.js';
 
@@ -369,6 +372,35 @@ apiRouter.post('/businesses/:businessId/products', requireBusinessAccess, async 
   }
 });
 
+apiRouter.patch(
+  '/businesses/:businessId/products/:productId',
+  requireBusinessAccess,
+  async (req, res, next) => {
+    try {
+      const schema = z.object({
+        available: z.number().int().nonnegative(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid stock update', details: parsed.error.flatten() });
+        return;
+      }
+      const product = await updateProductStock({
+        businessId: param(req.params.businessId),
+        productId: param(req.params.productId),
+        available: parsed.data.available,
+      });
+      if (!product) {
+        res.status(404).json({ error: 'Product not found' });
+        return;
+      }
+      res.json({ product });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 apiRouter.get('/businesses/:businessId/customers', requireBusinessAccess, async (req, res, next) => {
   try {
     const customers = await listCustomers(param(req.params.businessId));
@@ -382,6 +414,33 @@ apiRouter.get('/businesses/:businessId/orders', requireBusinessAccess, async (re
   try {
     const orders = await listOrders(param(req.params.businessId));
     res.json({ orders });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/businesses/:businessId/bundle', requireBusinessAccess, async (req, res, next) => {
+  try {
+    const businessId = param(req.params.businessId);
+    const [products, customers, orders, memories, conversations, payments, inventoryEvents] =
+      await Promise.all([
+        listProducts(businessId),
+        listCustomers(businessId),
+        listOrders(businessId),
+        listMemories(businessId),
+        listConversations(businessId, 40),
+        listPayments(businessId),
+        listInventoryEvents(businessId, 40),
+      ]);
+    res.json({
+      products,
+      customers,
+      orders,
+      memories,
+      conversations,
+      payments,
+      inventoryEvents,
+    });
   } catch (err) {
     next(err);
   }

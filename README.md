@@ -11,10 +11,12 @@ npm install
 npm run dev
 ```
 
-Health: `GET http://localhost:4000/v1/health`
+Health: `GET http://localhost:4000/v1/health`  
+Swagger UI: `http://localhost:4000/docs`  
+OpenAPI JSON: `http://localhost:4000/v1/openapi.json`
 
 Without Supabase, send `X-Demo-Mode: 1` and use business id  
-`00000000-0000-4000-8000-000000000001`.
+`00000000-0000-4000-8000-000000000001`. In Swagger, click **Authorize**, set `demoMode` to `1`.
 
 ## Build / start (Render-compatible)
 

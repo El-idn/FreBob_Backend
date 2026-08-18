@@ -126,6 +126,62 @@ export async function addProduct(
   return product;
 }
 
+export async function updateProductStock(input: {
+  businessId: string;
+  productId: string;
+  available: number;
+}): Promise<Product | null> {
+  const available = Math.max(0, Math.floor(input.available));
+  const products = await listProducts(input.businessId);
+  const existing = products.find((p) => p.id === input.productId);
+  if (!existing) return null;
+
+  const previous = existing.available;
+  const product: Product = { ...existing, available };
+  const now = new Date().toISOString();
+  const delta = available - previous;
+
+  if (storeMode() === 'memory') {
+    const db = getMemoryDb();
+    db.products = db.products.map((p) => (p.id === product.id ? product : p));
+    if (delta !== 0) {
+      db.inventoryEvents.unshift({
+        id: crypto.randomUUID(),
+        businessId: input.businessId,
+        productId: product.id,
+        productName: product.name,
+        eventType: 'restock',
+        quantity: Math.abs(delta),
+        createdAt: now,
+      });
+    }
+    return product;
+  }
+
+  const supabase = getSupabase()!;
+  const { error } = await supabase
+    .from('products')
+    .update({ available: product.available })
+    .eq('id', product.id)
+    .eq('business_id', input.businessId);
+  if (error) throw new Error(error.message);
+
+  if (delta !== 0) {
+    const { error: eventErr } = await supabase.from('inventory_events').insert({
+      id: crypto.randomUUID(),
+      business_id: input.businessId,
+      product_id: product.id,
+      product_name: product.name,
+      event_type: 'restock',
+      quantity: Math.abs(delta),
+      created_at: now,
+    });
+    if (eventErr) throw new Error(eventErr.message);
+  }
+
+  return product;
+}
+
 export async function listCustomers(businessId: string): Promise<Customer[]> {
   if (storeMode() === 'memory') {
     return getMemoryDb().customers.filter((c) => c.businessId === businessId);
@@ -211,6 +267,41 @@ export async function listConversations(
     sourceText: row.source_text as string,
     createdAt: row.created_at as string,
   }));
+}
+
+export async function listPayments(businessId: string): Promise<Payment[]> {
+  if (storeMode() === 'memory') {
+    return getMemoryDb()
+      .payments.filter((p) => p.businessId === businessId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  const { data, error } = await getSupabase()!
+    .from('payments')
+    .select('*')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapPayment);
+}
+
+export async function listInventoryEvents(
+  businessId: string,
+  limit = 40,
+): Promise<InventoryEvent[]> {
+  if (storeMode() === 'memory') {
+    return getMemoryDb()
+      .inventoryEvents.filter((e) => e.businessId === businessId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+  const { data, error } = await getSupabase()!
+    .from('inventory_events')
+    .select('*')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapInventoryEvent);
 }
 
 export async function saveExtraction(record: ExtractionRecord): Promise<void> {
@@ -875,6 +966,30 @@ function mapMemory(row: Record<string, unknown>): MemoryNote {
     kind: String(row.kind),
     content: String(row.content),
     trustLevel: row.trust_level as MemoryNote['trustLevel'],
+    orderId: row.order_id ? String(row.order_id) : undefined,
+    createdAt: String(row.created_at),
+  };
+}
+
+function mapPayment(row: Record<string, unknown>): Payment {
+  return {
+    id: String(row.id),
+    businessId: String(row.business_id),
+    orderId: String(row.order_id),
+    amount: Number(row.amount),
+    method: row.method as Payment['method'],
+    createdAt: String(row.created_at),
+  };
+}
+
+function mapInventoryEvent(row: Record<string, unknown>): InventoryEvent {
+  return {
+    id: String(row.id),
+    businessId: String(row.business_id),
+    productId: row.product_id ? String(row.product_id) : undefined,
+    productName: String(row.product_name),
+    eventType: row.event_type as InventoryEvent['eventType'],
+    quantity: Number(row.quantity),
     orderId: row.order_id ? String(row.order_id) : undefined,
     createdAt: String(row.created_at),
   };
