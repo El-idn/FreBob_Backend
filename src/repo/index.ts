@@ -12,7 +12,7 @@ import type {
   Payment,
   Product,
 } from '../types.js';
-import { getMemoryDb, isDemoBusiness, resetMemoryDb } from './memoryDb.js';
+import { getMemoryDb, isDemoBusiness, resetMemoryDb, resetMemoryDbForCategory } from './memoryDb.js';
 import { DEMO_BUSINESS_ID } from '../data/seed.js';
 
 export type StoreMode = 'memory' | 'supabase';
@@ -23,6 +23,10 @@ export function storeMode(): StoreMode {
 
 export function resetDemoStore(): void {
   resetMemoryDb();
+}
+
+export function resetDemoStoreForCategory(category?: string): void {
+  resetMemoryDbForCategory(category);
 }
 
 export async function getBusiness(businessId: string): Promise<Business | null> {

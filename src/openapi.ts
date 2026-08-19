@@ -133,8 +133,25 @@ export const openApiSpec: JsonObject = {
       post: {
         tags: ['Demo'],
         summary: 'Reset in-memory demo data',
-        description: 'Only available when Supabase is not configured. Requires `X-Demo-Mode: 1`.',
+        description: 'Only available when Supabase is not configured. Requires `X-Demo-Mode: 1`. Pass an optional `category` to seed category-specific demo data.',
         security: demoOnly,
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  category: {
+                    type: 'string',
+                    description: 'Business category to seed. Defaults to Electronics if omitted.',
+                    example: 'Food & Restaurant',
+                  },
+                },
+              },
+            },
+          },
+        },
         responses: {
           200: {
             description: 'Demo store reset',

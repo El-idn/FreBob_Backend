@@ -1,4 +1,4 @@
-import { createSeedSnapshot } from '../data/seed.js';
+import { createSeedSnapshotForCategory } from '../data/seed.js';
 import type {
   AuditLog,
   Business,
@@ -28,8 +28,8 @@ export type DbSnapshot = {
   memberships: { businessId: string; userId: string; role: string }[];
 };
 
-function cloneSeed(): DbSnapshot {
-  const s = createSeedSnapshot();
+function cloneSeed(category?: string): DbSnapshot {
+  const s = createSeedSnapshotForCategory(category);
   return {
     users: [{ ...s.user }],
     businesses: [{ ...s.business }],
@@ -49,10 +49,15 @@ function cloneSeed(): DbSnapshot {
   };
 }
 
-let db: DbSnapshot = cloneSeed();
+let db: DbSnapshot = cloneSeed('Electronics');
 
 export function resetMemoryDb(): DbSnapshot {
-  db = cloneSeed();
+  db = cloneSeed('Electronics');
+  return db;
+}
+
+export function resetMemoryDbForCategory(category?: string): DbSnapshot {
+  db = cloneSeed(category);
   return db;
 }
 
@@ -61,5 +66,5 @@ export function getMemoryDb(): DbSnapshot {
 }
 
 export function isDemoBusiness(businessId: string): boolean {
-  return businessId === createSeedSnapshot().business.id;
+  return businessId === createSeedSnapshotForCategory('Electronics').business.id;
 }

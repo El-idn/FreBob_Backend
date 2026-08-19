@@ -33,6 +33,7 @@ import {
   listPayments,
   listProducts,
   resetDemoStore,
+  resetDemoStoreForCategory,
   saveExtraction,
   storeMode,
   updateBusiness,
@@ -73,7 +74,8 @@ apiRouter.post('/demo/reset', (req, res) => {
     res.status(401).json({ error: 'Send X-Demo-Mode: 1 to reset demo data' });
     return;
   }
-  resetDemoStore();
+  const category = typeof req.body?.category === 'string' ? req.body.category : undefined;
+  resetDemoStoreForCategory(category);
   res.json({ ok: true, businessId: DEMO_BUSINESS_ID });
 });
 
@@ -193,7 +195,7 @@ apiRouter.post('/auth/businesses', requireAuth, async (req, res, next) => {
     if (seedWhatsApp) {
       try {
         const { seedWhatsAppSampleForBusiness } = await import('../services/onboardingSeed.js');
-        await seedWhatsAppSampleForBusiness(result.business.id);
+        await seedWhatsAppSampleForBusiness(result.business.id, parsed.data.category);
       } catch (seedErr) {
         console.warn(
           'WhatsApp onboarding seed failed:',
