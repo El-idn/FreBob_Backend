@@ -868,6 +868,19 @@ export async function createBusinessForAuthUser(input: {
   });
   if (memErr) throw new Error(memErr.message);
 
+  const { data: membership, error: memCheckErr } = await supabase
+    .from('business_members')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (memCheckErr) throw new Error(memCheckErr.message);
+  if (!membership) {
+    throw new Error(
+      'Business membership was not created. Please try again or contact support.',
+    );
+  }
+
   const business = mapBusiness(bizRow);
 
   for (const p of input.starterProducts ?? []) {
