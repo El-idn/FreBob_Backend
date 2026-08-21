@@ -50,13 +50,18 @@ function param(value: string | string[] | undefined): string {
 export const apiRouter = Router();
 
 apiRouter.get('/health', (_req, res) => {
+  const geminiKey = getGeminiApiKey();
   res.json({
     ok: true,
     service: 'frebob-server',
     store: storeMode(),
     supabaseConfigured: Boolean(getSupabase()),
-    geminiConfigured: Boolean(getGeminiApiKey()),
+    geminiConfigured: Boolean(geminiKey),
     geminiModel: getGeminiModel(),
+    /** Redacted fingerprint so local vs Render key mismatches are obvious without leaking the secret. */
+    geminiKeyHint: geminiKey
+      ? `${geminiKey.slice(0, Math.min(4, geminiKey.length))}…(len ${geminiKey.length})`
+      : null,
     yarnGptConfigured: yarnGptConfigured(),
     demoBusinessId: DEMO_BUSINESS_ID,
     time: new Date().toISOString(),

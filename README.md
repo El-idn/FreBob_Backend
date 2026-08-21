@@ -15,6 +15,8 @@ Health: `GET http://localhost:4000/v1/health`
 Swagger UI: `http://localhost:4000/docs`  
 OpenAPI JSON: `http://localhost:4000/v1/openapi.json`
 
+**Env reload:** `tsx watch` does **not** reload `.env`. After changing `GEMINI_API_KEY` (or any env), stop the process and run `npm run dev` again. Use the same `GEMINI_API_KEY` value as Render (`frebob-backend` → Environment). Health returns a redacted `geminiKeyHint` (prefix + length) so you can confirm local matches production without printing the secret.
+
 Without Supabase, send `X-Demo-Mode: 1` and use business id  
 `00000000-0000-4000-8000-000000000001`. In Swagger, click **Authorize**, set `demoMode` to `1`.
 

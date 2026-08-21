@@ -7,7 +7,7 @@ export function getGeminiApiKey(): string | undefined {
 
 /**
  * Prefer GEMINI_MODEL; otherwise try current Flash models.
- * gemini-2.0-flash shut down 2026-06-01; gemini-2.5-flash 404s on some keys.
+ * Per-model quotas (same API key): on 429/503 we walk this list.
  */
 export function getGeminiModel(): string {
   return process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash';
@@ -19,9 +19,18 @@ function modelCandidates(): string[] {
     preferred,
     'gemini-3.5-flash',
     'gemini-3.6-flash',
+    'gemini-3.7-flash',
+    'gemini-3.5-flash-lite',
     'gemini-flash-latest',
   ];
   return [...new Set(fallbacks.filter(Boolean))];
+}
+
+function isRetryableModelError(status: number, message: string): boolean {
+  if (status === 404 || status === 429 || status === 503) return true;
+  return /not found|no longer available|quota|rate limit|resource.?exhausted|unavailable/i.test(
+    message,
+  );
 }
 
 export function geminiGenerateContentUrl(apiKey: string, model = getGeminiModel()): string {
@@ -188,9 +197,10 @@ export async function geminiGenerateContent(input: {
         payload.error?.message ||
         bodyText.slice(0, 220) ||
         `HTTP ${response.status}`;
-      errors.push(`${model}: ${msg}`);
-      // Try next model on 404 / not found
-      if (response.status === 404 || /not found|no longer available/i.test(msg)) {
+      errors.push(`${model}: HTTP ${response.status}: ${msg}`);
+      // Same key, per-model limits: try next model on 404 / 429 / 503
+      if (isRetryableModelError(response.status, msg)) {
+        console.warn(`Gemini ${model} failed (${response.status}); trying next model`);
         continue;
       }
       throw new Error(`Gemini ${model} HTTP ${response.status}: ${msg}`);
