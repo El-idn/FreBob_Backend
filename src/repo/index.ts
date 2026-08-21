@@ -12,6 +12,7 @@ import type {
   Payment,
   Product,
 } from '../types.js';
+import { normalizeName } from '../lib/normalizeName.js';
 import { getMemoryDb, isDemoBusiness, resetMemoryDb, resetMemoryDbForCategory } from './memoryDb.js';
 import { DEMO_BUSINESS_ID } from '../data/seed.js';
 
@@ -409,14 +410,17 @@ export async function findOrCreateCustomer(
   name: string,
   phone?: string,
 ): Promise<Customer> {
+  const displayName = normalizeName(name);
   const customers = await listCustomers(businessId);
-  const existing = customers.find((c) => c.name.toLowerCase() === name.toLowerCase());
+  const existing = customers.find(
+    (c) => c.name.toLowerCase() === displayName.toLowerCase(),
+  );
   if (existing) return existing;
 
   const customer: Customer = {
     id: crypto.randomUUID(),
     businessId,
-    name: name || 'Walk-in customer',
+    name: displayName || 'Walk-in customer',
     phone,
     balanceOwed: 0,
   };
@@ -751,7 +755,8 @@ export async function bootstrapAppUser(input: {
 
   if (existing) {
     const patch: Record<string, unknown> = {};
-    if (input.name && input.name !== existing.name) patch.name = input.name;
+    const nextName = normalizeName(input.name);
+    if (nextName && nextName !== existing.name) patch.name = nextName;
     if (input.email && input.email !== existing.email) patch.email = input.email;
     if (
       input.preferredLanguage &&
@@ -774,7 +779,10 @@ export async function bootstrapAppUser(input: {
 
   const row = {
     auth_user_id: input.authUserId,
-    name: input.name || input.email.split('@')[0] || 'FreBob user',
+    name:
+      normalizeName(input.name) ||
+      normalizeName(input.email.split('@')[0] ?? '') ||
+      'FreBob user',
     email: input.email || null,
     preferred_language: input.preferredLanguage ?? 'en',
   };
